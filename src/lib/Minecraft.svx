@@ -1,9 +1,9 @@
-# Minecraft builds
+## Minecraft builds
 
 Here are some of my Minecraft builds:
 
-## 2025
+### 2025
 
 Here's a train design I built:
 
-<img src="minecraft/2025-04-23__Train.jpeg" style="width: 100%">
+<img alt="A minecraft train" style="width: 100%" src="minecraft/2025-04-23__Train.jpeg" >
