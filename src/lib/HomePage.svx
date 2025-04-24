@@ -7,3 +7,9 @@ My interests are:
 - Legos
 - Minecraft
 - Trains
+
+<Minecraft/>
+
+<script>
+   import Minecraft from "$lib/Minecraft.svx"
+</script>
