@@ -7,9 +7,10 @@ My interests are:
 - Legos
 - Minecraft
 - Trains
+- Playing piano
 
 <Minecraft/>
 
-<script>
+<script lang="ts">
    import Minecraft from "$lib/Minecraft.svx"
 </script>
