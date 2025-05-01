@@ -10,4 +10,4 @@ Here's a train design I built:
 
 This creation is called "Rascal Pig." It's also a house:
 
-<img alt="Rascal pig house" style="width: 100%" src="minecraft/2025-04-30_Rascal-Pig.jpeg" >
+<img alt="Rascal pig house" style="width: 100%" src="minecraft/2025-04-30__Rascal-Pig.jpeg" >
