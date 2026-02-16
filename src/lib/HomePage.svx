@@ -8,6 +8,11 @@ My interests are:
 - Minecraft
 - Trains
 - Playing piano
+
+## Projects
+
+I like to make websites and programs with my dad. Here are a few things we have built, with the help of Claude (thanks Claude!)
+
 - [Math Word Problem Calculator](/calculator)
 - [Block Blast](/block-blast)
 
