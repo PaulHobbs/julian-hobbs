@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 
 	// --- Types ---
-	type GearType = 'motor' | 'gear' | 'sheep';
+	type GearType = 'motor' | 'gear' | 'sheep' | 'slow-motor';
 	type PaletteItem = { type: GearType; teeth: number; label: string; color: string };
 	type Gear = {
 		id: number;
@@ -16,17 +16,22 @@
 		color: string;
 		jammed: boolean;
 		label: string;
+		level: number; // 1 or 2
 	};
 
 	// --- Constants ---
 	const MODULE = 5;
 	const MOTOR_RPM = 60;
+	const SLOW_MOTOR_RPM = 15;
 	const SNAP_TOLERANCE = 15;
 	const PALETTE_ITEMS: PaletteItem[] = [
 		{ type: 'motor', teeth: 12, label: 'Motor', color: '#e74c3c' },
+		{ type: 'slow-motor', teeth: 48, label: 'Giant Motor', color: '#c0392b' },
 		{ type: 'sheep', teeth: 12, label: 'Sheep', color: '#f5f0e1' },
 		{ type: 'gear', teeth: 12, label: '12T', color: '#2ecc71' },
+		{ type: 'gear', teeth: 16, label: '16T', color: '#27ae60' },
 		{ type: 'gear', teeth: 20, label: '20T', color: '#3498db' },
+		{ type: 'gear', teeth: 24, label: '24T', color: '#2980b9' },
 		{ type: 'gear', teeth: 32, label: '32T', color: '#e67e22' },
 		{ type: 'gear', teeth: 38, label: '38T', color: '#1abc9c' },
 		{ type: 'gear', teeth: 48, label: '48T', color: '#9b59b6' },
@@ -36,6 +41,14 @@
 		return (teeth * MODULE) / 2;
 	}
 
+	function isMotorType(type: GearType): boolean {
+		return type === 'motor' || type === 'sheep' || type === 'slow-motor';
+	}
+
+	function getMotorRpm(type: GearType): number {
+		return type === 'slow-motor' ? SLOW_MOTOR_RPM : MOTOR_RPM;
+	}
+
 	// --- State ---
 	let canvasEl: HTMLCanvasElement | undefined = $state(undefined);
 	let gears: Gear[] = $state([]);
@@ -43,6 +56,7 @@
 	let selectedGearId: number | null = $state(null);
 	let playing = $state(true);
 	let darkMode = $state(true);
+	let activeLevel = $state(1);
 	let animFrameId = 0;
 	let lastTime = 0;
 
@@ -74,22 +88,28 @@
 	}
 
 	function areMeshed(g1: Gear, g2: Gear): boolean {
+		if (g1.level !== g2.level) return false;
 		const ideal = meshDistance(g1, g2);
 		const actual = actualDistance(g1, g2);
 		return Math.abs(actual - ideal) < 3;
 	}
 
-	function findMeshNeighbors(gear: Gear): Gear[] {
-		return gears.filter(g => g.id !== gear.id && areMeshed(g, gear));
+	/** Check if two gears share the same axle (same position, different levels) */
+	function areAxleConnected(g1: Gear, g2: Gear): boolean {
+		if (g1.level === g2.level) return false;
+		const dx = g1.x - g2.x;
+		const dy = g1.y - g2.y;
+		return Math.sqrt(dx * dx + dy * dy) < 3;
 	}
 
 	// --- Snap logic ---
-	function findSnapPosition(gear: { teeth: number }, x: number, y: number, excludeId: number): { x: number; y: number; snapTo: Gear } | null {
+	function findSnapPosition(gear: { teeth: number }, x: number, y: number, excludeId: number, level: number): { x: number; y: number; snapTo: Gear } | null {
 		let bestSnap: { x: number; y: number; snapTo: Gear } | null = null;
 		let bestDist = Infinity;
 
 		for (const other of gears) {
 			if (other.id === excludeId) continue;
+			if (other.level !== level) continue;
 			const ideal = pitchRadius(gear.teeth) + pitchRadius(other.teeth);
 			const dx = x - other.x;
 			const dy = y - other.y;
@@ -115,11 +135,31 @@
 		return bestSnap;
 	}
 
-	// Check if placing at (x,y) would overlap any existing gear (excluding excludeId)
-	function wouldOverlap(teeth: number, x: number, y: number, excludeId: number): boolean {
+	/** Find a gear on the OTHER level near (x,y) that we could axle-connect to */
+	function findAxleSnapTarget(x: number, y: number, excludeId: number, currentLevel: number): Gear | null {
+		const AXLE_SNAP_DIST = 25;
+		let best: Gear | null = null;
+		let bestDist = Infinity;
+		for (const other of gears) {
+			if (other.id === excludeId) continue;
+			if (other.level === currentLevel) continue;
+			const dx = x - other.x;
+			const dy = y - other.y;
+			const dist = Math.sqrt(dx * dx + dy * dy);
+			if (dist < AXLE_SNAP_DIST && dist < bestDist) {
+				bestDist = dist;
+				best = other;
+			}
+		}
+		return best;
+	}
+
+	// Check if placing at (x,y) would overlap any existing gear on same level (excluding excludeId)
+	function wouldOverlap(teeth: number, x: number, y: number, excludeId: number, level: number): boolean {
 		const r = pitchRadius(teeth);
 		for (const other of gears) {
 			if (other.id === excludeId) continue;
+			if (other.level !== level) continue;
 			const otherR = pitchRadius(other.teeth);
 			const dx = x - other.x;
 			const dy = y - other.y;
@@ -141,20 +181,23 @@
 			g.jammed = false;
 		}
 
-		// Build adjacency
-		const adj = new Map<number, number[]>();
+		// Build adjacency: meshing (same level, opposite dir) + axle (cross level, same dir)
+		const adj = new Map<number, { id: number; type: 'mesh' | 'axle' }[]>();
 		for (const g of gears) adj.set(g.id, []);
 		for (let i = 0; i < gears.length; i++) {
 			for (let j = i + 1; j < gears.length; j++) {
 				if (areMeshed(gears[i], gears[j])) {
-					adj.get(gears[i].id)!.push(gears[j].id);
-					adj.get(gears[j].id)!.push(gears[i].id);
+					adj.get(gears[i].id)!.push({ id: gears[j].id, type: 'mesh' });
+					adj.get(gears[j].id)!.push({ id: gears[i].id, type: 'mesh' });
+				} else if (areAxleConnected(gears[i], gears[j])) {
+					adj.get(gears[i].id)!.push({ id: gears[j].id, type: 'axle' });
+					adj.get(gears[j].id)!.push({ id: gears[i].id, type: 'axle' });
 				}
 			}
 		}
 
 		// Find motors
-		const motors = gears.filter(g => g.type === 'motor' || g.type === 'sheep');
+		const motors = gears.filter(g => isMotorType(g.type));
 
 		// BFS from each motor
 		const visited = new Set<number>();
@@ -163,7 +206,7 @@
 
 		for (const motor of motors) {
 			if (visited.has(motor.id)) continue;
-			motor.rpm = MOTOR_RPM;
+			motor.rpm = getMotorRpm(motor.type);
 			motor.direction = 1;
 
 			const queue: number[] = [motor.id];
@@ -173,15 +216,25 @@
 				const currentId = queue.shift()!;
 				const current = gearMap.get(currentId)!;
 
-				for (const neighborId of adj.get(currentId)!) {
-					const neighbor = gearMap.get(neighborId)!;
-					const expectedDir = -current.direction;
-					const expectedRpm = (current.rpm * current.teeth) / neighbor.teeth;
+				for (const link of adj.get(currentId)!) {
+					const neighbor = gearMap.get(link.id)!;
 
-					if (visited.has(neighborId)) {
+					let expectedDir: number;
+					let expectedRpm: number;
+
+					if (link.type === 'mesh') {
+						// Meshing: opposite direction, RPM scales by gear ratio
+						expectedDir = -current.direction;
+						expectedRpm = (current.rpm * current.teeth) / neighbor.teeth;
+					} else {
+						// Axle: same direction, same RPM (rigid connection)
+						expectedDir = current.direction;
+						expectedRpm = current.rpm;
+					}
+
+					if (visited.has(link.id)) {
 						// Check for jam: if already visited with different direction
 						if (neighbor.direction !== expectedDir) {
-							// Jam! Mark entire connected component
 							markJammed(motor.id, adj, gearMap);
 						}
 						continue;
@@ -189,14 +242,14 @@
 
 					neighbor.direction = expectedDir;
 					neighbor.rpm = expectedRpm;
-					visited.add(neighborId);
-					queue.push(neighborId);
+					visited.add(link.id);
+					queue.push(link.id);
 				}
 			}
 		}
 	}
 
-	function markJammed(startId: number, adj: Map<number, number[]>, gearMap: Map<number, Gear>): void {
+	function markJammed(startId: number, adj: Map<number, { id: number; type: string }[]>, gearMap: Map<number, Gear>): void {
 		const visited = new Set<number>();
 		const queue = [startId];
 		visited.add(startId);
@@ -206,28 +259,29 @@
 			gear.jammed = true;
 			gear.rpm = 0;
 			gear.direction = 0;
-			for (const nid of adj.get(id)!) {
-				if (!visited.has(nid)) {
-					visited.add(nid);
-					queue.push(nid);
+			for (const link of adj.get(id)!) {
+				if (!visited.has(link.id)) {
+					visited.add(link.id);
+					queue.push(link.id);
 				}
 			}
 		}
 	}
 
 	// --- Canvas drawing ---
-	function drawGear(ctx: CanvasRenderingContext2D, gear: Gear, isSelected: boolean): void {
+	function drawGear(ctx: CanvasRenderingContext2D, gear: Gear, isSelected: boolean, alpha: number = 1): void {
 		const pr = pitchRadius(gear.teeth);
 		const outerR = pr + MODULE * 0.8;
 		const innerR = pr - MODULE * 0.8;
 		const toothCount = gear.teeth;
 
 		ctx.save();
+		ctx.globalAlpha = alpha;
 		ctx.translate(gear.x, gear.y);
 		ctx.rotate(gear.angle);
 
 		// Glow effect for fast-spinning gears
-		if (Math.abs(gear.rpm) > 100 && !gear.jammed) {
+		if (Math.abs(gear.rpm) > 100 && !gear.jammed && alpha > 0.5) {
 			const glowIntensity = Math.min((Math.abs(gear.rpm) - 100) / 200, 1);
 			ctx.shadowColor = gear.color;
 			ctx.shadowBlur = 15 + glowIntensity * 20;
@@ -293,6 +347,17 @@
 			ctx.fillText('⚡', 0, 0);
 		}
 
+		// Slow motor indicator
+		if (gear.type === 'slow-motor' && !gear.jammed) {
+			ctx.fillStyle = '#fff';
+			ctx.font = `bold ${Math.max(pr * 0.25, 10)}px sans-serif`;
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText('⚡', 0, -pr * 0.08);
+			ctx.font = `${Math.max(pr * 0.12, 7)}px sans-serif`;
+			ctx.fillText('SLOW', 0, pr * 0.12);
+		}
+
 		// Sheep indicator
 		if (gear.type === 'sheep' && !gear.jammed) {
 			ctx.fillStyle = '#333';
@@ -307,6 +372,7 @@
 		// Selection ring
 		if (isSelected) {
 			ctx.save();
+			ctx.globalAlpha = alpha;
 			ctx.translate(gear.x, gear.y);
 			ctx.beginPath();
 			ctx.arc(0, 0, outerR + 6, 0, Math.PI * 2);
@@ -319,8 +385,9 @@
 		}
 
 		// Direction arrow (when spinning)
-		if (gear.direction !== 0 && !gear.jammed && playing) {
+		if (gear.direction !== 0 && !gear.jammed && playing && alpha > 0.5) {
 			ctx.save();
+			ctx.globalAlpha = alpha;
 			ctx.translate(gear.x, gear.y);
 			const arrowR = outerR + 12;
 			const arrowAngle = gear.angle + (gear.direction > 0 ? 0 : Math.PI);
@@ -378,14 +445,20 @@
 			ctx.stroke();
 		}
 
-		// Draw mesh connections
-		for (let i = 0; i < gears.length; i++) {
-			for (let j = i + 1; j < gears.length; j++) {
-				if (areMeshed(gears[i], gears[j])) {
+		const inactiveLevel = activeLevel === 1 ? 2 : 1;
+		const inactiveGears = gears.filter(g => g.level === inactiveLevel);
+		const activeGears = gears.filter(g => g.level === activeLevel);
+
+		// Draw inactive level mesh connections (desaturated)
+		ctx.save();
+		ctx.filter = 'saturate(0.2)';
+		for (let i = 0; i < inactiveGears.length; i++) {
+			for (let j = i + 1; j < inactiveGears.length; j++) {
+				if (areMeshed(inactiveGears[i], inactiveGears[j])) {
 					ctx.beginPath();
-					ctx.moveTo(gears[i].x, gears[i].y);
-					ctx.lineTo(gears[j].x, gears[j].y);
-					ctx.strokeStyle = gears[i].jammed ? 'rgba(255,0,0,0.3)' : darkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+					ctx.moveTo(inactiveGears[i].x, inactiveGears[i].y);
+					ctx.lineTo(inactiveGears[j].x, inactiveGears[j].y);
+					ctx.strokeStyle = inactiveGears[i].jammed ? 'rgba(255,0,0,0.1)' : darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
 					ctx.lineWidth = 2;
 					ctx.setLineDash([4, 4]);
 					ctx.stroke();
@@ -394,8 +467,53 @@
 			}
 		}
 
-		// Draw gears
-		for (const gear of gears) {
+		// Draw inactive level gears (desaturated + transparent)
+		for (const gear of inactiveGears) {
+			drawGear(ctx, gear, false, 0.25);
+		}
+		ctx.restore();
+
+		// Draw axle connection indicators (between levels)
+		for (const ag of activeGears) {
+			for (const ig of inactiveGears) {
+				if (areAxleConnected(ag, ig)) {
+					ctx.save();
+					ctx.beginPath();
+					const r = Math.max(pitchRadius(ag.teeth), pitchRadius(ig.teeth)) * 0.15;
+					ctx.arc(ag.x, ag.y, r + 4, 0, Math.PI * 2);
+					ctx.strokeStyle = '#f39c12';
+					ctx.lineWidth = 2;
+					ctx.setLineDash([3, 3]);
+					ctx.stroke();
+					ctx.setLineDash([]);
+					// Draw a small "axle" indicator
+					ctx.beginPath();
+					ctx.arc(ag.x, ag.y, 3, 0, Math.PI * 2);
+					ctx.fillStyle = '#f39c12';
+					ctx.fill();
+					ctx.restore();
+				}
+			}
+		}
+
+		// Draw active level mesh connections
+		for (let i = 0; i < activeGears.length; i++) {
+			for (let j = i + 1; j < activeGears.length; j++) {
+				if (areMeshed(activeGears[i], activeGears[j])) {
+					ctx.beginPath();
+					ctx.moveTo(activeGears[i].x, activeGears[i].y);
+					ctx.lineTo(activeGears[j].x, activeGears[j].y);
+					ctx.strokeStyle = activeGears[i].jammed ? 'rgba(255,0,0,0.3)' : darkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+					ctx.lineWidth = 2;
+					ctx.setLineDash([4, 4]);
+					ctx.stroke();
+					ctx.setLineDash([]);
+				}
+			}
+		}
+
+		// Draw active level gears
+		for (const gear of activeGears) {
 			drawGear(ctx, gear, gear.id === selectedGearId);
 		}
 
@@ -409,8 +527,14 @@
 			let px = dragX;
 			let py = dragY;
 
-			const snap = findSnapPosition({ teeth }, px, py, excludeId);
-			if (snap) {
+			// Check for axle snap to other level first
+			const axleTarget = findAxleSnapTarget(px, py, excludeId, activeLevel);
+
+			const snap = findSnapPosition({ teeth }, px, py, excludeId, activeLevel);
+			if (axleTarget) {
+				px = axleTarget.x;
+				py = axleTarget.y;
+			} else if (snap) {
 				px = snap.x;
 				py = snap.y;
 			}
@@ -418,7 +542,8 @@
 			const previewGear: Gear = {
 				id: -1, type, teeth, x: px, y: py,
 				angle: 0, rpm: 0, direction: 0,
-				color, jammed: false, label: ''
+				color, jammed: false, label: '',
+				level: activeLevel,
 			};
 
 			ctx.globalAlpha = 0.5;
@@ -426,7 +551,7 @@
 			ctx.globalAlpha = 1;
 
 			// Snap indicator
-			if (snap) {
+			if (snap && !axleTarget) {
 				ctx.beginPath();
 				ctx.arc(px, py, pitchRadius(teeth) + MODULE + 4, 0, Math.PI * 2);
 				ctx.strokeStyle = '#f1c40f';
@@ -435,7 +560,36 @@
 				ctx.stroke();
 				ctx.setLineDash([]);
 			}
+
+			// Axle snap indicator
+			if (axleTarget) {
+				ctx.beginPath();
+				ctx.arc(px, py, pitchRadius(teeth) + MODULE + 4, 0, Math.PI * 2);
+				ctx.strokeStyle = '#f39c12';
+				ctx.lineWidth = 3;
+				ctx.setLineDash([6, 3]);
+				ctx.stroke();
+				ctx.setLineDash([]);
+				// Label
+				ctx.fillStyle = '#f39c12';
+				ctx.font = 'bold 12px sans-serif';
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'bottom';
+				ctx.fillText('AXLE LINK', px, py - pitchRadius(teeth) - MODULE - 10);
+			}
 		}
+
+		// Level indicator on canvas
+		ctx.save();
+		ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
+		ctx.font = 'bold 13px sans-serif';
+		ctx.textAlign = 'left';
+		ctx.textBaseline = 'top';
+		ctx.fillText(`Level ${activeLevel}`, 10, 10);
+		ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
+		ctx.font = '11px sans-serif';
+		ctx.fillText(`(Level ${inactiveLevel} shown faded)`, 10, 28);
+		ctx.restore();
 	}
 
 	// --- Animation loop ---
@@ -468,9 +622,10 @@
 	}
 
 	function findGearAt(x: number, y: number): Gear | null {
-		// Check in reverse so topmost gear is found first
+		// Only find gears on the active level
 		for (let i = gears.length - 1; i >= 0; i--) {
 			const g = gears[i];
+			if (g.level !== activeLevel) continue;
 			const outerR = pitchRadius(g.teeth) + MODULE;
 			const dx = x - g.x;
 			const dy = y - g.y;
@@ -521,12 +676,19 @@
 			// Move existing gear
 			let newX = dragX;
 			let newY = dragY;
-			const snap = findSnapPosition({ teeth: dragGear.teeth }, newX, newY, dragGear.id);
-			if (snap) {
+
+			// Check axle snap
+			const axleTarget = findAxleSnapTarget(newX, newY, dragGear.id, activeLevel);
+
+			const snap = findSnapPosition({ teeth: dragGear.teeth }, newX, newY, dragGear.id, activeLevel);
+			if (axleTarget) {
+				newX = axleTarget.x;
+				newY = axleTarget.y;
+			} else if (snap) {
 				newX = snap.x;
 				newY = snap.y;
 			}
-			if (!wouldOverlap(dragGear.teeth, newX, newY, dragGear.id)) {
+			if (!wouldOverlap(dragGear.teeth, newX, newY, dragGear.id, activeLevel)) {
 				dragGear.x = newX;
 				dragGear.y = newY;
 			}
@@ -535,15 +697,22 @@
 			// Place new gear from palette
 			let newX = dragX;
 			let newY = dragY;
-			const snap = findSnapPosition({ teeth: dragFromPalette.teeth }, newX, newY, -1);
-			if (snap) {
+
+			// Check axle snap
+			const axleTarget = findAxleSnapTarget(newX, newY, -1, activeLevel);
+
+			const snap = findSnapPosition({ teeth: dragFromPalette.teeth }, newX, newY, -1, activeLevel);
+			if (axleTarget) {
+				newX = axleTarget.x;
+				newY = axleTarget.y;
+			} else if (snap) {
 				newX = snap.x;
 				newY = snap.y;
 			}
 			// Only place if within canvas bounds
 			const pr = pitchRadius(dragFromPalette.teeth);
 			if (newX > pr && newX < canvasWidth - pr && newY > pr && newY < canvasHeight - pr) {
-				if (!wouldOverlap(dragFromPalette.teeth, newX, newY, -1)) {
+				if (!wouldOverlap(dragFromPalette.teeth, newX, newY, -1, activeLevel)) {
 					const newGear: Gear = {
 						id: nextId++,
 						type: dragFromPalette.type,
@@ -556,6 +725,7 @@
 						color: dragFromPalette.color,
 						jammed: false,
 						label: dragFromPalette.label,
+						level: activeLevel,
 					};
 					gears = [...gears, newGear];
 					selectedGearId = newGear.id;
@@ -629,6 +799,11 @@
 		playing = !playing;
 	}
 
+	function switchLevel(): void {
+		activeLevel = activeLevel === 1 ? 2 : 1;
+		selectedGearId = null;
+	}
+
 	// --- Resize ---
 	function updateCanvasSize(): void {
 		if (!containerEl) return;
@@ -681,6 +856,12 @@
 			<button class="ctrl-btn" onclick={togglePlay} title={playing ? 'Pause' : 'Play'}>
 				{playing ? '⏸' : '▶️'}
 			</button>
+			<button class="ctrl-btn level-btn" class:level-active={activeLevel === 1} onclick={() => { activeLevel = 1; selectedGearId = null; }} title="Switch to Level 1">
+				L1
+			</button>
+			<button class="ctrl-btn level-btn" class:level-active={activeLevel === 2} onclick={() => { activeLevel = 2; selectedGearId = null; }} title="Switch to Level 2">
+				L2
+			</button>
 			<button class="ctrl-btn" onclick={deleteSelected} disabled={selectedGearId === null} title="Delete selected">
 				🗑️
 			</button>
@@ -701,7 +882,7 @@
 				onpointerdown={(e) => handlePalettePointerDown(e, item)}
 			>
 				<div class="palette-preview" style:background-color={item.color} style:width="{Math.max(pitchRadius(item.teeth) * 0.8, 16)}px" style:height="{Math.max(pitchRadius(item.teeth) * 0.8, 16)}px">
-					{#if item.type === 'motor'}⚡{:else if item.type === 'sheep'}🐑{/if}
+					{#if item.type === 'motor'}⚡{:else if item.type === 'slow-motor'}⚡{:else if item.type === 'sheep'}🐑{/if}
 				</div>
 				<span class="palette-label">{item.label}</span>
 			</button>
@@ -721,10 +902,24 @@
 
 	{#if selectedGear}
 		<div class="info-panel">
-			<div class="info-title">{selectedGear.type === 'motor' ? 'Motor' : selectedGear.type === 'sheep' ? 'Sheep Motor 🐑' : `Gear (${selectedGear.teeth}T)`}</div>
+			<div class="info-title">
+				{#if selectedGear.type === 'motor'}
+					Motor
+				{:else if selectedGear.type === 'slow-motor'}
+					Giant Motor ⚡
+				{:else if selectedGear.type === 'sheep'}
+					Sheep Motor 🐑
+				{:else}
+					Gear ({selectedGear.teeth}T)
+				{/if}
+			</div>
 			<div class="info-row">
 				<span class="info-label">Teeth:</span>
 				<span class="info-value">{selectedGear.teeth}</span>
+			</div>
+			<div class="info-row">
+				<span class="info-label">Level:</span>
+				<span class="info-value">{selectedGear.level}</span>
 			</div>
 			<div class="info-row">
 				<span class="info-label">RPM:</span>
@@ -744,17 +939,23 @@
 					{/if}
 				</span>
 			</div>
-			{#if selectedGear.type === 'gear' && selectedGear.rpm > 0}
+			{#if !isMotorType(selectedGear.type) && selectedGear.rpm > 0}
 				<div class="info-row">
 					<span class="info-label">Ratio:</span>
 					<span class="info-value">{(selectedGear.rpm / MOTOR_RPM).toFixed(2)}x</span>
+				</div>
+			{/if}
+			{#if gears.some(g => g.id !== selectedGear!.id && areAxleConnected(g, selectedGear!))}
+				<div class="info-row axle-info">
+					<span class="info-label">Axle:</span>
+					<span class="info-value">Linked to L{selectedGear.level === 1 ? 2 : 1}</span>
 				</div>
 			{/if}
 		</div>
 	{/if}
 
 	<div class="instructions">
-		Drag components from the palette onto the canvas. Gears snap together automatically!
+		Drag components onto the canvas. Gears snap together! Use L1/L2 to switch levels. Drag a gear near a gear on the other level to axle-link them.
 	</div>
 
 	<div class="back-link">
@@ -817,6 +1018,19 @@
 	.ctrl-btn:disabled {
 		opacity: 0.3;
 		cursor: default;
+	}
+
+	.level-btn {
+		font-weight: 700;
+		font-size: 0.85rem;
+		min-width: 40px;
+		text-align: center;
+	}
+
+	.level-active {
+		background: rgba(243, 156, 18, 0.4);
+		border-color: #f39c12;
+		color: #f1c40f;
 	}
 
 	.palette {
@@ -916,6 +1130,10 @@
 		font-weight: 600;
 	}
 
+	.axle-info .info-value {
+		color: #f39c12;
+	}
+
 	.instructions {
 		text-align: center;
 		font-size: 0.8rem;
@@ -961,6 +1179,12 @@
 
 	.light .ctrl-btn:hover:not(:disabled) {
 		background: rgba(0,0,0,0.1);
+	}
+
+	.light .level-active {
+		background: rgba(243, 156, 18, 0.2);
+		border-color: #e67e22;
+		color: #e67e22;
 	}
 
 	.light .palette-item {

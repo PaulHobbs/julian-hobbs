@@ -21,7 +21,8 @@
       "Bash(pnpm exec playwright test:*)",
       "Bash(command grep -i playwright)",
       "Bash(PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm exec playwright test:*)",
-      "Bash(pnpm run build:*)"
+      "Bash(pnpm run build:*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }
