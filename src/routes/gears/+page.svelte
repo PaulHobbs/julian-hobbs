@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 
 	// --- Types ---
-	type GearType = 'motor' | 'gear' | 'sheep' | 'slow-motor';
+	type GearType = 'motor' | 'gear' | 'sheep' | 'slow-motor' | 'flywheel';
 	type PaletteItem = { type: GearType; teeth: number; label: string; color: string };
 	type Gear = {
 		id: number;
@@ -35,6 +35,7 @@
 		{ type: 'gear', teeth: 32, label: '32T', color: '#e67e22' },
 		{ type: 'gear', teeth: 38, label: '38T', color: '#1abc9c' },
 		{ type: 'gear', teeth: 48, label: '48T', color: '#9b59b6' },
+		{ type: 'flywheel', teeth: 60, label: 'Flywheel', color: '#7f8c8d' },
 	];
 
 	function pitchRadius(teeth: number): number {
@@ -365,6 +366,39 @@
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
 			ctx.fillText('🐑', 0, 1);
+		}
+
+		// Flywheel indicator - heavy rim ring and center weight
+		if (gear.type === 'flywheel') {
+			// Thick outer rim to indicate mass
+			ctx.beginPath();
+			ctx.arc(0, 0, pr - MODULE * 0.2, 0, Math.PI * 2);
+			ctx.strokeStyle = gear.jammed ? '#333' : darkenColor(gear.color, 0.4);
+			ctx.lineWidth = MODULE * 1.5;
+			ctx.stroke();
+
+			// Spokes
+			const spokeCount = 6;
+			const hubR = Math.max(pr * 0.25, 8);
+			const rimInner = pr - MODULE * 1.0;
+			ctx.strokeStyle = gear.jammed ? '#444' : darkenColor(gear.color, 0.15);
+			ctx.lineWidth = 3;
+			for (let s = 0; s < spokeCount; s++) {
+				const a = (s / spokeCount) * Math.PI * 2;
+				ctx.beginPath();
+				ctx.moveTo(Math.cos(a) * hubR, Math.sin(a) * hubR);
+				ctx.lineTo(Math.cos(a) * rimInner, Math.sin(a) * rimInner);
+				ctx.stroke();
+			}
+
+			// Label
+			if (!gear.jammed) {
+				ctx.fillStyle = '#fff';
+				ctx.font = `bold ${Math.max(pr * 0.13, 8)}px sans-serif`;
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'middle';
+				ctx.fillText('FW', 0, 0);
+			}
 		}
 
 		ctx.restore();
@@ -909,6 +943,8 @@
 					Giant Motor ⚡
 				{:else if selectedGear.type === 'sheep'}
 					Sheep Motor 🐑
+				{:else if selectedGear.type === 'flywheel'}
+					Flywheel ({selectedGear.teeth}T)
 				{:else}
 					Gear ({selectedGear.teeth}T)
 				{/if}
