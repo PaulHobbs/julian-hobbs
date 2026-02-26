@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 
 	// --- Types ---
-	type GearType = 'motor' | 'gear';
+	type GearType = 'motor' | 'gear' | 'sheep';
 	type PaletteItem = { type: GearType; teeth: number; label: string; color: string };
 	type Gear = {
 		id: number;
@@ -24,9 +24,11 @@
 	const SNAP_TOLERANCE = 15;
 	const PALETTE_ITEMS: PaletteItem[] = [
 		{ type: 'motor', teeth: 12, label: 'Motor', color: '#e74c3c' },
+		{ type: 'sheep', teeth: 12, label: 'Sheep', color: '#f5f0e1' },
 		{ type: 'gear', teeth: 12, label: '12T', color: '#2ecc71' },
 		{ type: 'gear', teeth: 20, label: '20T', color: '#3498db' },
 		{ type: 'gear', teeth: 32, label: '32T', color: '#e67e22' },
+		{ type: 'gear', teeth: 38, label: '38T', color: '#1abc9c' },
 		{ type: 'gear', teeth: 48, label: '48T', color: '#9b59b6' },
 	];
 
@@ -40,6 +42,7 @@
 	let nextId = $state(1);
 	let selectedGearId: number | null = $state(null);
 	let playing = $state(true);
+	let darkMode = $state(true);
 	let animFrameId = 0;
 	let lastTime = 0;
 
@@ -151,7 +154,7 @@
 		}
 
 		// Find motors
-		const motors = gears.filter(g => g.type === 'motor');
+		const motors = gears.filter(g => g.type === 'motor' || g.type === 'sheep');
 
 		// BFS from each motor
 		const visited = new Set<number>();
@@ -278,19 +281,25 @@
 		// Axle hole
 		ctx.beginPath();
 		ctx.arc(0, 0, Math.max(pr * 0.08, 3), 0, Math.PI * 2);
-		ctx.fillStyle = '#1a1a3e';
+		ctx.fillStyle = darkMode ? '#1a1a3e' : '#ccc';
 		ctx.fill();
 
 		// Motor indicator
 		if (gear.type === 'motor' && !gear.jammed) {
-			ctx.beginPath();
-			const indicR = Math.max(pr * 0.15, 6);
-			// Lightning bolt
 			ctx.fillStyle = '#fff';
 			ctx.font = `bold ${Math.max(pr * 0.35, 10)}px sans-serif`;
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
 			ctx.fillText('⚡', 0, 0);
+		}
+
+		// Sheep indicator
+		if (gear.type === 'sheep' && !gear.jammed) {
+			ctx.fillStyle = '#333';
+			ctx.font = `${Math.max(pr * 0.5, 12)}px sans-serif`;
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText('🐑', 0, 1);
 		}
 
 		ctx.restore();
@@ -317,7 +326,7 @@
 			const arrowAngle = gear.angle + (gear.direction > 0 ? 0 : Math.PI);
 			ctx.beginPath();
 			ctx.arc(0, 0, arrowR, arrowAngle - 0.3, arrowAngle + 0.3);
-			ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+			ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
 			ctx.lineWidth = 2;
 			ctx.stroke();
 			// Arrowhead
@@ -328,7 +337,7 @@
 			const perpAngle = arrowAngle + 0.3 * gear.direction + Math.PI / 2 * gear.direction;
 			ctx.lineTo(tipX + Math.cos(perpAngle) * 6, tipY + Math.sin(perpAngle) * 6);
 			ctx.lineTo(tipX + Math.cos(arrowAngle + 0.3 * gear.direction) * 8, tipY + Math.sin(arrowAngle + 0.3 * gear.direction) * 8);
-			ctx.fillStyle = 'rgba(255,255,255,0.4)';
+			ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
 			ctx.fill();
 			ctx.restore();
 		}
@@ -353,7 +362,7 @@
 		ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
 		// Background grid
-		ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+		ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
 		ctx.lineWidth = 1;
 		const gridSize = 40;
 		for (let x = 0; x < canvasWidth; x += gridSize) {
@@ -376,7 +385,7 @@
 					ctx.beginPath();
 					ctx.moveTo(gears[i].x, gears[i].y);
 					ctx.lineTo(gears[j].x, gears[j].y);
-					ctx.strokeStyle = gears[i].jammed ? 'rgba(255,0,0,0.3)' : 'rgba(255,255,255,0.15)';
+					ctx.strokeStyle = gears[i].jammed ? 'rgba(255,0,0,0.3)' : darkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
 					ctx.lineWidth = 2;
 					ctx.setLineDash([4, 4]);
 					ctx.stroke();
@@ -665,7 +674,7 @@
 </svelte:head>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="page-container" onpointermove={handleGlobalPointerMove} onpointerup={handleGlobalPointerUp}>
+<div class="page-container" class:light={!darkMode} onpointermove={handleGlobalPointerMove} onpointerup={handleGlobalPointerUp}>
 	<div class="header">
 		<h1>Gear Train Simulator</h1>
 		<div class="controls">
@@ -678,6 +687,9 @@
 			<button class="ctrl-btn" onclick={clearAll} title="Clear all">
 				Clear
 			</button>
+			<button class="ctrl-btn" onclick={() => darkMode = !darkMode} title={darkMode ? 'Light mode' : 'Dark mode'}>
+				{darkMode ? '☀️' : '🌙'}
+			</button>
 		</div>
 	</div>
 
@@ -689,7 +701,7 @@
 				onpointerdown={(e) => handlePalettePointerDown(e, item)}
 			>
 				<div class="palette-preview" style:background-color={item.color} style:width="{Math.max(pitchRadius(item.teeth) * 0.8, 16)}px" style:height="{Math.max(pitchRadius(item.teeth) * 0.8, 16)}px">
-					{#if item.type === 'motor'}⚡{/if}
+					{#if item.type === 'motor'}⚡{:else if item.type === 'sheep'}🐑{/if}
 				</div>
 				<span class="palette-label">{item.label}</span>
 			</button>
@@ -709,7 +721,7 @@
 
 	{#if selectedGear}
 		<div class="info-panel">
-			<div class="info-title">{selectedGear.type === 'motor' ? 'Motor' : `Gear (${selectedGear.teeth}T)`}</div>
+			<div class="info-title">{selectedGear.type === 'motor' ? 'Motor' : selectedGear.type === 'sheep' ? 'Sheep Motor 🐑' : `Gear (${selectedGear.teeth}T)`}</div>
 			<div class="info-row">
 				<span class="info-label">Teeth:</span>
 				<span class="info-value">{selectedGear.teeth}</span>
@@ -732,7 +744,7 @@
 					{/if}
 				</span>
 			</div>
-			{#if selectedGear.type !== 'motor' && selectedGear.rpm > 0}
+			{#if selectedGear.type === 'gear' && selectedGear.rpm > 0}
 				<div class="info-row">
 					<span class="info-label">Ratio:</span>
 					<span class="info-value">{(selectedGear.rpm / MOTOR_RPM).toFixed(2)}x</span>
@@ -927,6 +939,70 @@
 	.back-link a:hover {
 		color: #fff;
 		text-decoration: underline;
+	}
+
+	.page-container.light {
+		background: #ffffff;
+		color: #222;
+	}
+
+	.light h1 {
+		background: linear-gradient(90deg, #e67e22, #e74c3c);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+	}
+
+	.light .ctrl-btn {
+		background: rgba(0,0,0,0.06);
+		border-color: rgba(0,0,0,0.15);
+		color: #222;
+	}
+
+	.light .ctrl-btn:hover:not(:disabled) {
+		background: rgba(0,0,0,0.1);
+	}
+
+	.light .palette-item {
+		background: rgba(0,0,0,0.04);
+		border-color: rgba(0,0,0,0.12);
+		color: #222;
+	}
+
+	.light .palette-item:hover {
+		border-color: rgba(0,0,0,0.3);
+		background: rgba(0,0,0,0.08);
+	}
+
+	.light .canvas-container {
+		background: rgba(0,0,0,0.03);
+		border-color: rgba(0,0,0,0.1);
+	}
+
+	.light .info-panel {
+		background: rgba(255,255,255,0.9);
+		border-color: rgba(0,0,0,0.12);
+		color: #222;
+	}
+
+	.light .info-title {
+		color: #e67e22;
+	}
+
+	.light .info-label {
+		opacity: 0.6;
+	}
+
+	.light .instructions {
+		color: #666;
+	}
+
+	.light .back-link a {
+		color: rgba(0,0,0,0.5);
+	}
+
+	.light .back-link a:hover {
+		color: #222;
 	}
 
 	@media (min-width: 700px) {
