@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npm run check:*)",
+      "Bash(git stash:*)",
+      "Bash(git stash pop:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(pnpm build:*)",
+      "Bash(npx playwright test:*)",
+      "Bash(curl:*)",
+      "Bash(command grep -E 'playwright|preview')",
+      "Bash(command grep -v grep)",
+      "Bash(kill:*)",
+      "Bash(pnpm test:e2e:*)",
+      "Bash(lsof:*)",
+      "Bash(command grep LISTEN)",
+      "Bash(pnpx playwright install:*)",
+      "Bash(pnpx playwright test:*)",
+      "Bash(pnpm exec playwright test:*)",
+      "Bash(command grep -i playwright)",
+      "Bash(PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm exec playwright test:*)",
+      "Bash(pnpm run build:*)"
+    ]
+  }
+}

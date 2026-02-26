@@ -15,6 +15,7 @@ I like to make websites and programs with my dad. Here are a few things we have 
 
 - [Math Word Problem Calculator](/calculator)
 - [Block Blast](/block-blast)
+- [Gear Train Simulator](/gears)
 
 <Minecraft/>
 
