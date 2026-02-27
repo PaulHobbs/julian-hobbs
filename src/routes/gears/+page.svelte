@@ -27,8 +27,8 @@
 	const PALETTE_ITEMS: PaletteItem[] = [
 		{ type: 'motor', teeth: 12, label: 'Motor', color: '#e74c3c' },
 		{ type: 'slow-motor', teeth: 48, label: 'Giant Motor', color: '#c0392b' },
-		{ type: 'sheep', teeth: 12, label: 'Sheep', color: '#f5f0e1' },
-		{ type: 'gear', teeth: 12, label: '12T', color: '#2ecc71' },
+		{ type: 'sheep', teeth: 20, label: 'Sheep', color: '#f5f0e1' },
+		{ type: 'gear', teeth: 12, label: '12T', color: 'rgb(230 225 97)' },
 		{ type: 'gear', teeth: 16, label: '16T', color: '#27ae60' },
 		{ type: 'gear', teeth: 20, label: '20T', color: '#3498db' },
 		{ type: 'gear', teeth: 24, label: '24T', color: '#2980b9' },
@@ -43,7 +43,7 @@
 	}
 
 	function isMotorType(type: GearType): boolean {
-		return type === 'motor' || type === 'sheep' || type === 'slow-motor';
+		return type === 'motor' || type === 'slow-motor';
 	}
 
 	function getMotorRpm(type: GearType): number {
@@ -776,7 +776,8 @@
 	// --- Palette drag ---
 	function handlePalettePointerDown(e: PointerEvent, item: PaletteItem): void {
 		e.preventDefault();
-		// We need the pointer captured on the canvas for movement
+		// Capture pointer on canvas so touch move/up events are delivered there
+		canvasEl?.setPointerCapture(e.pointerId);
 		dragging = true;
 		dragFromPalette = item;
 		dragGear = null;
@@ -942,7 +943,7 @@
 				{:else if selectedGear.type === 'slow-motor'}
 					Giant Motor ⚡
 				{:else if selectedGear.type === 'sheep'}
-					Sheep Motor 🐑
+					Sheep 🐑
 				{:else if selectedGear.type === 'flywheel'}
 					Flywheel ({selectedGear.teeth}T)
 				{:else}
@@ -1130,6 +1131,7 @@
 		display: block;
 		width: 100%;
 		height: 100%;
+		touch-action: none;
 	}
 
 	.info-panel {
