@@ -518,7 +518,7 @@
 		padding: 1.5rem 1rem;
 		font-family: system-ui, -apple-system, sans-serif;
 		min-height: 100vh;
-		background: linear-gradient(135deg, #1a1a3e 0%, #2d1b69 50%, #1a1a3e 100%);
+		background: url('/world-map.svg') center center / cover no-repeat fixed, linear-gradient(135deg, #1a1a3e 0%, #2d1b69 50%, #1a1a3e 100%);
 		color: #fff;
 		position: relative;
 		touch-action: none;
