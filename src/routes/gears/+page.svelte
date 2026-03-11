@@ -234,8 +234,8 @@
 					}
 
 					if (visited.has(link.id)) {
-						// Check for jam: if already visited with different direction
-						if (neighbor.direction !== expectedDir) {
+						// Check for jam: if already visited with different direction or different RPM
+						if (neighbor.direction !== expectedDir || Math.abs(neighbor.rpm - expectedRpm) > 0.01) {
 							markJammed(motor.id, adj, gearMap);
 						}
 						continue;
