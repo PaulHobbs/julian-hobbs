@@ -46,6 +46,30 @@
 		[[false, true], [true, true]],
 	];
 
+	// --- Wallpaper ---
+	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona';
+	const WALLPAPERS: { key: WallpaperKey; label: string; emoji: string; bg: string; preview: string }[] = [
+		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: 'linear-gradient(135deg, #1a1a3e, #2d1b69)' },
+		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: 'linear-gradient(160deg, #06200e 0%, #0d3318 30%, #1a5224 65%, #0a2a14 100%)', preview: 'linear-gradient(160deg, #06200e, #1a5224)' },
+		{ key: 'train', label: 'Train', emoji: '🚂', bg: 'linear-gradient(135deg, #1a1008 0%, #2d1e0c 35%, #4a3010 65%, #1a1208 100%)', preview: 'linear-gradient(135deg, #1a1008, #4a3010)' },
+		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: 'linear-gradient(180deg, #0e2a4a 0%, #1565a0 50%, #0e3a6a 100%)', preview: 'linear-gradient(180deg, #0e2a4a, #1565a0)' },
+		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: 'linear-gradient(135deg, #7a2e00 0%, #c75a00 40%, #e67e22 70%, #9a4000 100%)', preview: 'linear-gradient(135deg, #7a2e00, #e67e22)' },
+		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: 'linear-gradient(135deg, #0a0a0a 0%, #1a0808 50%, #0a0a0a 100%)', preview: 'linear-gradient(135deg, #0a0a0a, #c0392b)' },
+	];
+	let wallpaper: WallpaperKey = $state('default');
+	let showSettings = $state(false);
+
+	function saveWallpaper(): void {
+		try { localStorage.setItem('block-blast-wallpaper', wallpaper); } catch {}
+	}
+
+	function loadWallpaper(): void {
+		try {
+			const saved = localStorage.getItem('block-blast-wallpaper') as WallpaperKey;
+			if (saved && WALLPAPERS.some(w => w.key === saved)) wallpaper = saved;
+		} catch {}
+	}
+
 	let board: Cell[][] = $state(createEmptyBoard());
 	let pieces: (Piece | null)[] = $state([]);
 	let selectedPieceIndex: number | null = $state(null);
@@ -379,6 +403,7 @@
 
 	onMount(() => {
 		loadHighScore();
+		loadWallpaper();
 		resetGame();
 	});
 
@@ -395,18 +420,21 @@
 </svelte:head>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="game-container" onpointermove={handlePointerMove} onpointerup={handlePointerUp}>
+<div class="game-container" style:background={wallpaper !== 'default' ? WALLPAPERS.find(w => w.key === wallpaper)!.bg : undefined} onpointermove={handlePointerMove} onpointerup={handlePointerUp}>
 	<div class="header">
 		<h1>Block Blast</h1>
-		<div class="scores">
-			<div class="score-box">
-				<span class="score-label">Score</span>
-				<span class="score-value">{score}</span>
+		<div class="header-right">
+			<div class="scores">
+				<div class="score-box">
+					<span class="score-label">Score</span>
+					<span class="score-value">{score}</span>
+				</div>
+				<div class="score-box high">
+					<span class="score-label">Best</span>
+					<span class="score-value">{highScore}</span>
+				</div>
 			</div>
-			<div class="score-box high">
-				<span class="score-label">Best</span>
-				<span class="score-value">{highScore}</span>
-			</div>
+			<button class="settings-btn" onclick={() => showSettings = !showSettings} title="Settings">⚙️</button>
 		</div>
 	</div>
 
@@ -509,6 +537,31 @@
 	<div class="back-link">
 		<a href="/">Back to Home</a>
 	</div>
+
+	{#if showSettings}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="settings-overlay" onclick={() => showSettings = false}>
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="settings-panel" onclick={(e) => e.stopPropagation()}>
+				<div class="settings-header">
+					<h3>Wallpaper</h3>
+					<button class="close-btn" onclick={() => showSettings = false}>✕</button>
+				</div>
+				<div class="wallpaper-grid">
+					{#each WALLPAPERS as wp}
+						<button
+							class="wallpaper-option"
+							class:selected={wallpaper === wp.key}
+							onclick={() => { wallpaper = wp.key; saveWallpaper(); }}
+						>
+							<div class="wallpaper-preview" style:background={wp.preview}></div>
+							<span>{wp.emoji} {wp.label}</span>
+						</button>
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -531,6 +584,28 @@
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 1rem;
+	}
+
+	.header-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.settings-btn {
+		background: rgba(255,255,255,0.1);
+		border: 1px solid rgba(255,255,255,0.2);
+		border-radius: 8px;
+		color: #fff;
+		padding: 0.4rem 0.6rem;
+		cursor: pointer;
+		font-size: 1rem;
+		transition: background 0.2s;
+		line-height: 1;
+	}
+
+	.settings-btn:hover {
+		background: rgba(255,255,255,0.2);
 	}
 
 	h1 {
@@ -886,5 +961,103 @@
 			width: 34px;
 			height: 34px;
 		}
+	}
+
+	/* Settings modal */
+	.settings-overlay {
+		position: fixed;
+		top: 0; left: 0; right: 0; bottom: 0;
+		background: rgba(0,0,0,0.55);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 300;
+		animation: settings-fade-in 0.15s ease-out;
+	}
+
+	@keyframes settings-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	.settings-panel {
+		background: rgba(15,8,40,0.97);
+		backdrop-filter: blur(20px);
+		border: 1px solid rgba(255,255,255,0.18);
+		border-radius: 16px;
+		padding: 1.25rem;
+		min-width: 280px;
+		max-width: 420px;
+		width: calc(100vw - 2rem);
+		box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+	}
+
+	.settings-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.settings-header h3 {
+		margin: 0;
+		font-size: 1.1rem;
+		color: #f1c40f;
+		font-weight: 700;
+	}
+
+	.close-btn {
+		background: none;
+		border: none;
+		color: rgba(255,255,255,0.5);
+		cursor: pointer;
+		font-size: 1rem;
+		padding: 0.25rem 0.5rem;
+		line-height: 1;
+		border-radius: 6px;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.close-btn:hover {
+		color: #fff;
+		background: rgba(255,255,255,0.1);
+	}
+
+	.wallpaper-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.65rem;
+	}
+
+	.wallpaper-option {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		background: rgba(255,255,255,0.05);
+		border: 2px solid rgba(255,255,255,0.1);
+		border-radius: 10px;
+		padding: 0.6rem 0.35rem;
+		cursor: pointer;
+		color: #fff;
+		font-size: 0.72rem;
+		transition: all 0.2s;
+	}
+
+	.wallpaper-option:hover {
+		border-color: rgba(255,255,255,0.3);
+		background: rgba(255,255,255,0.1);
+	}
+
+	.wallpaper-option.selected {
+		border-color: #f1c40f;
+		background: rgba(241,196,15,0.12);
+	}
+
+	.wallpaper-preview {
+		width: 100%;
+		height: 44px;
+		border-radius: 6px;
+		border: 1px solid rgba(255,255,255,0.15);
 	}
 </style>

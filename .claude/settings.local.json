@@ -23,7 +23,22 @@
       "Bash(PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 pnpm exec playwright test:*)",
       "Bash(pnpm run build:*)",
       "Bash(xargs cat:*)",
-      "Bash(npx svelte-check:*)"
+      "Bash(npx svelte-check:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(tmux:*)",
+      "Bash(pnpx -y claude-tmux 2>&1 | head -20)",
+      "mcp__claude-tmux__spawn",
+      "mcp__claude-tmux__read",
+      "mcp__claude-tmux__send",
+      "mcp__claude-tmux__kill",
+      "Bash(npm view:*)",
+      "Bash(npx -y claude-tmux --help 2>&1 | head -5 || true)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(grep -r \"wallpaper\\\\|background\\\\|settings\\\\|theme\" /Users/phobbs/code/julian-hobbs/src --include=\"*.svelte\" --include=\"*.ts\" --include=\"*.js\" 2>/dev/null | head -20)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "claude-tmux"
+  ]
 }
