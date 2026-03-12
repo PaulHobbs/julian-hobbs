@@ -49,12 +49,12 @@
 	// --- Wallpaper ---
 	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona';
 	const WALLPAPERS: { key: WallpaperKey; label: string; emoji: string; bg: string; preview: string }[] = [
-		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: 'linear-gradient(135deg, #1a1a3e, #2d1b69)' },
-		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: 'linear-gradient(160deg, #06200e 0%, #0d3318 30%, #1a5224 65%, #0a2a14 100%)', preview: 'linear-gradient(160deg, #06200e, #1a5224)' },
-		{ key: 'train', label: 'Train', emoji: '🚂', bg: 'linear-gradient(135deg, #1a1008 0%, #2d1e0c 35%, #4a3010 65%, #1a1208 100%)', preview: 'linear-gradient(135deg, #1a1008, #4a3010)' },
-		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: 'linear-gradient(180deg, #0e2a4a 0%, #1565a0 50%, #0e3a6a 100%)', preview: 'linear-gradient(180deg, #0e2a4a, #1565a0)' },
-		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: 'linear-gradient(135deg, #7a2e00 0%, #c75a00 40%, #e67e22 70%, #9a4000 100%)', preview: 'linear-gradient(135deg, #7a2e00, #e67e22)' },
-		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: 'linear-gradient(135deg, #0a0a0a 0%, #1a0808 50%, #0a0a0a 100%)', preview: 'linear-gradient(135deg, #0a0a0a, #c0392b)' },
+		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite.jpg') center / cover" },
+		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: "url('/wallpapers/forest.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/forest.jpg') center / cover" },
+		{ key: 'train', label: 'Train', emoji: '🚂', bg: "url('/wallpapers/train.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/train.jpg') center / cover" },
+		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: "url('/wallpapers/crane.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/crane.jpg') center / cover" },
+		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: "url('/wallpapers/construction.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/construction.jpg') center / cover" },
+		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: "url('/wallpapers/daytona.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/daytona.jpg') center / cover" },
 	];
 	let wallpaper: WallpaperKey = $state('default');
 	let showSettings = $state(false);
@@ -571,7 +571,7 @@
 		padding: 1.5rem 1rem;
 		font-family: system-ui, -apple-system, sans-serif;
 		min-height: 100vh;
-		background: url('/world-map.svg') center center / cover no-repeat fixed, linear-gradient(135deg, #1a1a3e 0%, #2d1b69 50%, #1a1a3e 100%);
+		background: url('/wallpapers/satellite.jpg') center center / cover no-repeat fixed;
 		color: #fff;
 		position: relative;
 		touch-action: none;

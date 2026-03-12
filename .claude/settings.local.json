@@ -35,10 +35,19 @@
       "Bash(npm view:*)",
       "Bash(npx -y claude-tmux --help 2>&1 | head -5 || true)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(grep -r \"wallpaper\\\\|background\\\\|settings\\\\|theme\" /Users/phobbs/code/julian-hobbs/src --include=\"*.svelte\" --include=\"*.ts\" --include=\"*.js\" 2>/dev/null | head -20)"
+      "Bash(grep -r \"wallpaper\\\\|background\\\\|settings\\\\|theme\" /Users/phobbs/code/julian-hobbs/src --include=\"*.svelte\" --include=\"*.ts\" --include=\"*.js\" 2>/dev/null | head -20)",
+      "Bash(pnpm install:*)",
+      "mcp__tmux__read_pane",
+      "Bash(pnpm check:*)",
+      "WebFetch(domain:earthobservatory.nasa.gov)",
+      "WebFetch(domain:science.nasa.gov)",
+      "WebFetch(domain:visibleearth.nasa.gov)",
+      "WebFetch(domain:svs.gsfc.nasa.gov)",
+      "WebFetch(domain:unsplash.com)"
     ]
   },
   "enabledMcpjsonServers": [
-    "claude-tmux"
+    "claude-tmux",
+    "tmux"
   ]
 }

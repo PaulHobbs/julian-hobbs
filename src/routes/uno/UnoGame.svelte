@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Card, CardColor, GameState, Player } from '$lib/uno/types';
+	import type { Card, CardColor, GameState, NetworkMessage, Player } from '$lib/uno/types';
 	import { applyCardEffect, applyColorChoice, drawCardsForPlayer } from '$lib/uno/effects';
 	import { hasPlayableCard } from '$lib/uno/rules';
 	import { aiChooseAction, aiShouldCallUno, getAIDelay } from '$lib/uno/ai';
@@ -18,9 +18,15 @@
 		onStateChange: (state: GameState) => void;
 		onRoundEnd: (winnerId: string, finalState: GameState) => void;
 		onQuit: () => void;
+		isMultiplayer?: boolean;
+		isHost?: boolean;
+		onMultiplayerAction?: (msg: NetworkMessage) => void;
 	}
 
-	let { gameState, localPlayerId, onStateChange, onRoundEnd, onQuit }: Props = $props();
+	let { gameState, localPlayerId, onStateChange, onRoundEnd, onQuit, isMultiplayer = false, isHost = false, onMultiplayerAction }: Props = $props();
+
+	// In guest mode: send actions to host, don't apply locally
+	let isGuestMode = $derived(isMultiplayer && !isHost);
 
 	let aiTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -65,6 +71,16 @@
 	function handlePlayCard(cardIndex: number) {
 		if (!isLocalTurn || gameState.awaitingColorChoice) return;
 
+		if (isGuestMode) {
+			onMultiplayerAction?.({
+				type: 'play_card',
+				payload: { cardIndex },
+				senderId: localPlayerId,
+				timestamp: Date.now()
+			});
+			return;
+		}
+
 		const card = localPlayer.hand[cardIndex];
 
 		// If it's a wild card, we need to choose color after playing
@@ -95,6 +111,16 @@
 
 	function handleDraw() {
 		if (!canDraw) return;
+
+		if (isGuestMode) {
+			onMultiplayerAction?.({
+				type: 'draw_card',
+				payload: {},
+				senderId: localPlayerId,
+				timestamp: Date.now()
+			});
+			return;
+		}
 
 		let newState: GameState;
 
@@ -141,6 +167,17 @@
 
 	function handlePassTurn() {
 		if (!isLocalTurn || !gameState.hasDrawnThisTurn) return;
+
+		if (isGuestMode) {
+			onMultiplayerAction?.({
+				type: 'pass_turn',
+				payload: {},
+				senderId: localPlayerId,
+				timestamp: Date.now()
+			});
+			return;
+		}
+
 		const newState = {
 			...gameState,
 			currentPlayerIndex: advanceTurn(gameState),
@@ -152,6 +189,16 @@
 	}
 
 	function handleColorChoice(color: CardColor) {
+		if (isGuestMode) {
+			onMultiplayerAction?.({
+				type: 'choose_color',
+				payload: { color },
+				senderId: localPlayerId,
+				timestamp: Date.now()
+			});
+			return;
+		}
+
 		const newState = applyColorChoice(gameState, color);
 
 		// Check for round end after wild
@@ -169,6 +216,16 @@
 
 	function handleCallUno() {
 		if (localPlayer.hand.length <= 2) {
+			if (isGuestMode) {
+				onMultiplayerAction?.({
+					type: 'call_uno',
+					payload: {},
+					senderId: localPlayerId,
+					timestamp: Date.now()
+				});
+				return;
+			}
+
 			const newPlayers = gameState.players.map((p) =>
 				p.id === localPlayerId ? { ...p, calledUno: true } : p
 			);
@@ -186,8 +243,9 @@
 		return ((state.currentPlayerIndex + state.direction) % state.players.length + state.players.length) % state.players.length;
 	}
 
-	// AI turn handling
+	// AI turn handling (only host or single-player runs AI)
 	$effect(() => {
+		if (isGuestMode) return;
 		if (currentPlayer?.type === 'ai' && gameState.phase === 'playing') {
 			if (aiTimeout) clearTimeout(aiTimeout);
 
@@ -444,6 +502,13 @@
 	{#if showColorPicker}
 		<UnoColorPicker onpick={handleColorChoice} />
 	{/if}
+
+	<!-- Multiplayer: remote player turn indicator -->
+	{#if isGuestMode && !isLocalTurn && currentPlayer}
+		<div class="remote-turn-banner">
+			Waiting for {currentPlayer.name}...
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -577,5 +642,20 @@
 	@keyframes pulse {
 		0%, 100% { opacity: 1; }
 		50% { opacity: 0.6; }
+	}
+
+	.remote-turn-banner {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background: rgba(0, 0, 0, 0.7);
+		color: rgba(255, 255, 255, 0.8);
+		padding: 10px 24px;
+		border-radius: 24px;
+		font-size: 0.95rem;
+		pointer-events: none;
+		animation: pulse 1.5s infinite;
+		z-index: 5;
 	}
 </style>

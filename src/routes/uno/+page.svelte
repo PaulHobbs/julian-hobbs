@@ -1,11 +1,15 @@
 <script lang="ts">
-	import type { GameState, Player, AIDifficulty, CardColor, HouseRules } from '$lib/uno/types';
+	import type { GameState, Player, AIDifficulty, CardColor, HouseRules, NetworkMessage } from '$lib/uno/types';
 	import { createDeck, shuffleDeck, dealHands, findStartCard } from '$lib/uno/deck';
 	import { DEFAULT_HOUSE_RULES, DEFAULT_TARGET_SCORE, AI_NAMES } from '$lib/uno/constants';
 	import { calculateRoundScore, applyRoundScores, createRoundResult, checkGameEnd } from '$lib/uno/scoring';
+	import { MultiplayerManager } from '$lib/uno/multiplayer';
+	import type { LobbyPlayer } from '$lib/uno/multiplayer';
+	import { processPlayerAction } from '$lib/uno/actions';
 	import UnoGame from './UnoGame.svelte';
+	import UnoOnlineLobby from './UnoOnlineLobby.svelte';
 
-	type Phase = 'menu' | 'setup' | 'playing' | 'round_end' | 'game_end';
+	type Phase = 'menu' | 'setup' | 'online_setup' | 'online_lobby' | 'playing' | 'round_end' | 'game_end';
 
 	let phase: Phase = $state('menu');
 	let playerName: string = $state('Player');
@@ -18,6 +22,16 @@
 	let roundWinnerId: string = $state('');
 	let roundScores: Record<string, number> = $state({});
 	let gameWinnerId: string = $state('');
+
+	// Multiplayer state
+	let multiplayer: MultiplayerManager | null = $state(null);
+	let isMultiplayerHost: boolean = $state(false);
+	let lobbyPlayers: LobbyPlayer[] = $state([]);
+	let myOnlinePlayerId: string = $state('');
+	let onlineError: string = $state('');
+	let roomCodeInput: string = $state('');
+	let isConnecting: boolean = $state(false);
+	let hostDisconnected: boolean = $state(false);
 
 	function startGame() {
 		const players: Player[] = [
@@ -53,7 +67,6 @@
 		const { hands, remaining } = dealHands(deck, players.length);
 		const { startCard, remaining: drawPile } = findStartCard(remaining);
 
-		// Assign hands
 		const playersWithHands = players.map((p, i) => ({
 			...p,
 			hand: hands[i],
@@ -90,6 +103,10 @@
 
 	function handleStateChange(newState: GameState) {
 		gameState = newState;
+		// Host broadcasts state to all guests after every change
+		if (isMultiplayerHost && multiplayer) {
+			multiplayer.broadcastState(newState);
+		}
 	}
 
 	function handleRoundEnd(winnerId: string, finalState: GameState) {
@@ -99,14 +116,20 @@
 		const updatedPlayers = applyRoundScores(finalState.players, roundScores);
 		const roundResult = createRoundResult(finalState.roundNumber, winnerId, roundScores);
 
-		gameState = {
+		const newGameState: GameState = {
 			...finalState,
 			players: updatedPlayers,
 			roundHistory: [...finalState.roundHistory, roundResult],
 			phase: 'round_end'
 		};
 
-		// Check if someone won the game
+		gameState = newGameState;
+
+		// Host broadcasts round_end with scored state to guests
+		if (isMultiplayerHost && multiplayer) {
+			multiplayer.broadcastRoundEnd(winnerId, newGameState);
+		}
+
 		const gameWinner = checkGameEnd(updatedPlayers, targetScore);
 		if (gameWinner) {
 			gameWinnerId = gameWinner;
@@ -118,12 +141,24 @@
 
 	function nextRound() {
 		if (!gameState) return;
-		// Keep scores, start new round
 		const players = gameState.players.map((p) => ({ ...p, hand: [], calledUno: false }));
 		startRound(players);
+		// Broadcast new round state to guests
+		if (isMultiplayerHost && multiplayer && gameState) {
+			multiplayer.broadcastState(gameState);
+		}
 	}
 
 	function backToMenu() {
+		multiplayer?.destroy();
+		multiplayer = null;
+		isMultiplayerHost = false;
+		lobbyPlayers = [];
+		myOnlinePlayerId = '';
+		onlineError = '';
+		roomCodeInput = '';
+		isConnecting = false;
+		hostDisconnected = false;
 		phase = 'menu';
 		gameState = null;
 	}
@@ -134,6 +169,153 @@
 
 	let roundWinnerName = $derived(getPlayerName(roundWinnerId));
 	let gameWinnerName = $derived(getPlayerName(gameWinnerId));
+
+	// --- Multiplayer handlers ---
+
+	async function handleCreateRoom() {
+		onlineError = '';
+		isConnecting = true;
+		try {
+			const mp = await MultiplayerManager.createRoom({
+				onPlayerJoined(peerId, name) {
+					// Add to lobby
+					const updatedPlayers = [...lobbyPlayers, { id: peerId, name }];
+					lobbyPlayers = updatedPlayers;
+					// Tell all existing guests about the new player
+					mp.broadcastPlayerJoined(peerId, name);
+					// Send full roster to the new guest so they see everyone
+					mp.sendRosterToPeer(peerId, updatedPlayers);
+				},
+				onPlayerLeft(peerId) {
+					lobbyPlayers = lobbyPlayers.filter((p) => p.id !== peerId);
+					if (gameState) {
+						const newPlayers = gameState.players.map((p) =>
+							p.id === peerId ? { ...p, isConnected: false } : p
+						);
+						handleStateChange({ ...gameState, players: newPlayers });
+					}
+				},
+				onRemoteAction(peerId, msg) {
+					if (!gameState) return;
+					const result = processPlayerAction(gameState, peerId, msg);
+					if (!result) return;
+					if (result.type === 'state_change') {
+						handleStateChange(result.state);
+					} else if (result.type === 'round_end') {
+						handleRoundEnd(result.winnerId, result.state);
+					}
+				},
+				onError(error) {
+					onlineError = error;
+				}
+			});
+
+			multiplayer = mp;
+			isMultiplayerHost = true;
+			myOnlinePlayerId = mp.myPlayerId;
+			localPlayerId = mp.myPlayerId;
+
+			// Add host as first lobby player
+			lobbyPlayers = [{ id: mp.myPlayerId, name: playerName || 'Player' }];
+			phase = 'online_lobby';
+		} catch (e) {
+			onlineError = e instanceof Error ? e.message : 'Failed to create room';
+		} finally {
+			isConnecting = false;
+		}
+	}
+
+	async function handleJoinRoom() {
+		const code = roomCodeInput.trim().toUpperCase();
+		if (!code || code.length !== 6) {
+			onlineError = 'Enter a valid 6-character room code';
+			return;
+		}
+		onlineError = '';
+		isConnecting = true;
+		try {
+			const { manager, playerId } = await MultiplayerManager.joinRoom(
+				code,
+				playerName || 'Player',
+				{
+					onStateUpdate(state) {
+						gameState = state;
+						// Sync phase from received state
+						if (state.phase === 'playing') {
+							phase = 'playing';
+						}
+					},
+					onRoundEndReceived(winnerId, state) {
+						roundWinnerId = winnerId;
+						gameState = state;
+						const lastRound = state.roundHistory[state.roundHistory.length - 1];
+						roundScores = lastRound?.scores ?? {};
+						const gameWinner = checkGameEnd(state.players, state.targetScore);
+						if (gameWinner) {
+							gameWinnerId = gameWinner;
+							phase = 'game_end';
+						} else {
+							phase = 'round_end';
+						}
+					},
+					onPlayerJoined(peerId, name) {
+						if (!lobbyPlayers.find((p) => p.id === peerId)) {
+							lobbyPlayers = [...lobbyPlayers, { id: peerId, name }];
+						}
+					},
+					onPlayerLeft(peerId) {
+						lobbyPlayers = lobbyPlayers.filter((p) => p.id !== peerId);
+						// Check if the host disconnected
+						if (peerId === `uno-${roomCodeInput.toUpperCase().trim()}`) {
+							hostDisconnected = true;
+						}
+					},
+					onError(error) {
+						onlineError = error;
+					}
+				}
+			);
+
+			multiplayer = manager;
+			isMultiplayerHost = false;
+			myOnlinePlayerId = playerId;
+			localPlayerId = playerId;
+
+			// We'll receive the full player list via player_joined events from host
+			// Add ourselves as a starting point (host will have added us)
+			lobbyPlayers = [{ id: playerId, name: playerName || 'Player' }];
+			phase = 'online_lobby';
+		} catch (e) {
+			onlineError = e instanceof Error ? e.message : 'Failed to join room. Check the code and try again.';
+		} finally {
+			isConnecting = false;
+		}
+	}
+
+	function handleStartOnlineGame() {
+		if (!isMultiplayerHost || lobbyPlayers.length < 2) return;
+
+		const players: Player[] = lobbyPlayers.map((lp) => ({
+			id: lp.id,
+			name: lp.name,
+			type: 'human',
+			hand: [],
+			score: 0,
+			calledUno: false,
+			isConnected: true
+		}));
+
+		startRound(players);
+
+		// Broadcast initial state to all guests
+		if (multiplayer && gameState) {
+			multiplayer.broadcastState(gameState);
+		}
+	}
+
+	function handleMultiplayerAction(msg: NetworkMessage) {
+		multiplayer?.sendAction(msg);
+	}
 </script>
 
 <svelte:head>
@@ -147,8 +329,8 @@
 			<button class="menu-btn primary" onclick={() => phase = 'setup'}>
 				Play vs AI
 			</button>
-			<button class="menu-btn" disabled>
-				Online Multiplayer (Coming Soon)
+			<button class="menu-btn" onclick={() => phase = 'online_setup'}>
+				Online Multiplayer
 			</button>
 			<a href="/" class="back-link">Back to Home</a>
 		</div>
@@ -231,6 +413,67 @@
 			</div>
 		</div>
 
+	{:else if phase === 'online_setup'}
+		<div class="setup">
+			<h2>Online Multiplayer</h2>
+
+			<div class="form-group">
+				<label for="online-name">Your Name</label>
+				<input id="online-name" type="text" bind:value={playerName} maxlength={20} />
+			</div>
+
+			<div class="online-options">
+				<div class="online-option">
+					<h3>Create a Room</h3>
+					<p class="option-desc">Start a new game and share the code with friends</p>
+					<button
+						class="menu-btn primary"
+						onclick={handleCreateRoom}
+						disabled={isConnecting}
+					>
+						{isConnecting ? 'Creating...' : 'Create Room'}
+					</button>
+				</div>
+
+				<div class="divider">OR</div>
+
+				<div class="online-option">
+					<h3>Join a Room</h3>
+					<p class="option-desc">Enter the 6-character code from your friend</p>
+					<input
+						type="text"
+						class="code-input"
+						bind:value={roomCodeInput}
+						placeholder="Enter code..."
+						maxlength={6}
+						style="text-transform: uppercase;"
+					/>
+					<button
+						class="menu-btn"
+						onclick={handleJoinRoom}
+						disabled={isConnecting}
+					>
+						{isConnecting ? 'Joining...' : 'Join Room'}
+					</button>
+				</div>
+			</div>
+
+			{#if onlineError}
+				<p class="error-msg">{onlineError}</p>
+			{/if}
+
+			<button class="menu-btn" onclick={() => { onlineError = ''; phase = 'menu'; }}>Back</button>
+		</div>
+
+	{:else if phase === 'online_lobby' && multiplayer}
+		<UnoOnlineLobby
+			roomCode={multiplayer.roomCode}
+			isHost={isMultiplayerHost}
+			players={lobbyPlayers}
+			onStartGame={handleStartOnlineGame}
+			onLeave={backToMenu}
+		/>
+
 	{:else if phase === 'playing' && gameState}
 		<UnoGame
 			{gameState}
@@ -238,6 +481,9 @@
 			onStateChange={handleStateChange}
 			onRoundEnd={handleRoundEnd}
 			onQuit={backToMenu}
+			isMultiplayer={multiplayer !== null}
+			isHost={isMultiplayerHost}
+			onMultiplayerAction={handleMultiplayerAction}
 		/>
 
 	{:else if phase === 'round_end' && gameState}
@@ -253,7 +499,11 @@
 					</div>
 				{/each}
 			</div>
-			<button class="menu-btn primary" onclick={nextRound}>Next Round</button>
+			{#if !multiplayer || isMultiplayerHost}
+				<button class="menu-btn primary" onclick={nextRound}>Next Round</button>
+			{:else}
+				<p class="waiting-for-host">Waiting for host to start next round...</p>
+			{/if}
 		</div>
 
 	{:else if phase === 'game_end' && gameState}
@@ -269,8 +519,20 @@
 				{/each}
 			</div>
 			<div class="end-actions">
-				<button class="menu-btn primary" onclick={startGame}>Play Again</button>
+				{#if !multiplayer || isMultiplayerHost}
+					<button class="menu-btn primary" onclick={startGame}>Play Again</button>
+				{/if}
 				<button class="menu-btn" onclick={backToMenu}>Main Menu</button>
+			</div>
+		</div>
+	{/if}
+
+	{#if hostDisconnected}
+		<div class="disconnect-overlay">
+			<div class="disconnect-box">
+				<h2>Host Disconnected</h2>
+				<p>The host has left the game.</p>
+				<button class="menu-btn primary" onclick={backToMenu}>Return to Menu</button>
 			</div>
 		</div>
 	{/if}
@@ -338,7 +600,7 @@
 		border-color: #c0392b;
 	}
 
-	.menu-btn.primary:hover {
+	.menu-btn.primary:hover:not(:disabled) {
 		background: #c0392b;
 	}
 
@@ -350,11 +612,13 @@
 
 	/* Setup */
 	.setup {
-		max-width: 400px;
+		max-width: 420px;
 		width: 90%;
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
+		max-height: 90vh;
+		overflow-y: auto;
 	}
 
 	.setup h2 {
@@ -448,6 +712,69 @@
 		min-width: auto;
 	}
 
+	/* Online setup */
+	.online-options {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.online-option {
+		background: rgba(255, 255, 255, 0.06);
+		border-radius: 10px;
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		align-items: center;
+		text-align: center;
+	}
+
+	.online-option h3 {
+		margin: 0;
+		font-size: 1rem;
+	}
+
+	.option-desc {
+		margin: 0;
+		font-size: 0.8rem;
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.online-option .menu-btn {
+		min-width: 160px;
+	}
+
+	.code-input {
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		color: white;
+		padding: 10px 14px;
+		border-radius: 6px;
+		font-size: 1.2rem;
+		font-family: monospace;
+		letter-spacing: 4px;
+		text-align: center;
+		width: 160px;
+	}
+
+	.divider {
+		text-align: center;
+		color: rgba(255, 255, 255, 0.3);
+		font-size: 0.85rem;
+		letter-spacing: 2px;
+	}
+
+	.error-msg {
+		color: #e74c3c;
+		font-size: 0.9rem;
+		text-align: center;
+		margin: 0;
+		background: rgba(231, 76, 60, 0.1);
+		border-radius: 6px;
+		padding: 8px 12px;
+	}
+
 	/* Round end / Game end */
 	.round-end, .game-end {
 		text-align: center;
@@ -503,5 +830,43 @@
 	.end-actions {
 		display: flex;
 		gap: 10px;
+	}
+
+	.waiting-for-host {
+		color: rgba(255, 255, 255, 0.6);
+		font-style: italic;
+		margin: 0;
+	}
+
+	.disconnect-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.75);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+	}
+
+	.disconnect-box {
+		background: #1a1a3e;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 16px;
+		padding: 32px 40px;
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		align-items: center;
+	}
+
+	.disconnect-box h2 {
+		margin: 0;
+		color: #e74c3c;
+	}
+
+	.disconnect-box p {
+		margin: 0;
+		color: rgba(255, 255, 255, 0.7);
 	}
 </style>
