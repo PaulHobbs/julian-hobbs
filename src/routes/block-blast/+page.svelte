@@ -47,7 +47,7 @@
 	];
 
 	// --- Wallpaper ---
-	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'plain';
+	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'plain' | 'red' | 'yellow' | 'green' | 'blue';
 	const WALLPAPERS: { key: WallpaperKey; label: string; emoji: string; bg: string; preview: string }[] = [
 		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite-night.jpg') center / cover" },
 		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/forest.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/forest.jpg') center / cover" },
@@ -56,6 +56,10 @@
 		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/construction.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/construction.jpg') center / cover" },
 		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/daytona.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/daytona.jpg') center / cover" },
 		{ key: 'plain', label: 'Plain', emoji: '⬜', bg: '', preview: '#3b3f4e' },
+		{ key: 'red', label: 'Red', emoji: '🟥', bg: '#8c2020', preview: '#8c2020' },
+		{ key: 'yellow', label: 'Yellow', emoji: '🟨', bg: '#7a6000', preview: '#7a6000' },
+		{ key: 'green', label: 'Green', emoji: '🟩', bg: '#1e5c2e', preview: '#1e5c2e' },
+		{ key: 'blue', label: 'Blue', emoji: '🟦', bg: '#1a3a6c', preview: '#1a3a6c' },
 	];
 	let wallpaper: WallpaperKey = $state('default');
 	let showSettings = $state(false);
