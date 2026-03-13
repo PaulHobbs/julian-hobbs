@@ -47,7 +47,7 @@
 	];
 
 	// --- Wallpaper ---
-	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona';
+	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'white';
 	const WALLPAPERS: { key: WallpaperKey; label: string; emoji: string; bg: string; preview: string }[] = [
 		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite.jpg') center / cover" },
 		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: "url('/wallpapers/forest.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/forest.jpg') center / cover" },
@@ -55,6 +55,7 @@
 		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: "url('/wallpapers/crane.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/crane.jpg') center / cover" },
 		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: "url('/wallpapers/construction.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/construction.jpg') center / cover" },
 		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: "url('/wallpapers/daytona.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/daytona.jpg') center / cover" },
+		{ key: 'white', label: 'White', emoji: '⬜', bg: 'white', preview: 'white' },
 	];
 	let wallpaper: WallpaperKey = $state('default');
 	let showSettings = $state(false);
