@@ -60,17 +60,25 @@
 	let activeLevel = $state(1);
 
 	// --- Wallpaper ---
-	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'white';
+	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'plain';
 	const WALLPAPERS: { key: WallpaperKey; label: string; emoji: string; bg: string; preview: string }[] = [
-		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite.jpg') center / cover" },
+		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite-night.jpg') center / cover" },
 		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: "url('/wallpapers/forest.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/forest.jpg') center / cover" },
 		{ key: 'train', label: 'Train', emoji: '🚂', bg: "url('/wallpapers/train.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/train.jpg') center / cover" },
 		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: "url('/wallpapers/crane.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/crane.jpg') center / cover" },
 		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: "url('/wallpapers/construction.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/construction.jpg') center / cover" },
 		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: "url('/wallpapers/daytona.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/daytona.jpg') center / cover" },
-		{ key: 'white', label: 'White', emoji: '⬜', bg: 'white', preview: 'white' },
+		{ key: 'plain', label: 'Plain', emoji: '⬜', bg: '', preview: 'linear-gradient(to right, white 50%, #3b3f4e 50%)' },
 	];
 	let wallpaper: WallpaperKey = $state('default');
+
+	function getWallpaperBg(key: WallpaperKey, dark: boolean): string | undefined {
+		if (key === 'default' || key === 'plain') return undefined;
+		const wp = WALLPAPERS.find(w => w.key === key)!;
+		const overlay = dark ? 'rgba(0,0,0,0.52)' : 'rgba(255,255,255,0.55)';
+		return `linear-gradient(${overlay}, ${overlay}), ${wp.bg}`;
+	}
+	const wallpaperBg = $derived(getWallpaperBg(wallpaper, darkMode));
 	let showSettings = $state(false);
 	let animFrameId = 0;
 	let lastTime = 0;
@@ -910,7 +918,7 @@
 </svelte:head>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="page-container" class:light={!darkMode} style:background={wallpaper !== 'default' ? WALLPAPERS.find(w => w.key === wallpaper)!.bg : undefined} onpointermove={handleGlobalPointerMove} onpointerup={handleGlobalPointerUp}>
+<div class="page-container" class:light={!darkMode} class:wallpaper-plain={wallpaper === 'plain'} style:background={wallpaperBg} onpointermove={handleGlobalPointerMove} onpointerup={handleGlobalPointerUp}>
 	<div class="header">
 		<h1>Gear Train Simulator</h1>
 		<div class="controls">
@@ -1060,13 +1068,19 @@
 		padding: 1rem;
 		font-family: system-ui, -apple-system, sans-serif;
 		min-height: 100vh;
-		background: url('/wallpapers/satellite.jpg') center center / cover no-repeat fixed;
+		background:
+			linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)),
+			url('/wallpapers/satellite-night.jpg') center center / cover no-repeat fixed;
 		color: #fff;
 		touch-action: none;
 		user-select: none;
 		-webkit-user-select: none;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.page-container.wallpaper-plain {
+		background: #3b3f4e;
 	}
 
 	.header {
@@ -1252,8 +1266,14 @@
 	}
 
 	.page-container.light {
-		background: url('/wallpapers/satellite.jpg') center center / cover no-repeat fixed;
+		background:
+			linear-gradient(rgba(255,255,255,0.55), rgba(255,255,255,0.55)),
+			url('/wallpapers/satellite.jpg') center center / cover no-repeat fixed;
 		color: #222;
+	}
+
+	.page-container.light.wallpaper-plain {
+		background: white;
 	}
 
 	.light h1 {

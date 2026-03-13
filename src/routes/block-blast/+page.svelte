@@ -47,15 +47,15 @@
 	];
 
 	// --- Wallpaper ---
-	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'white';
+	type WallpaperKey = 'default' | 'forest' | 'train' | 'crane' | 'construction' | 'daytona' | 'plain';
 	const WALLPAPERS: { key: WallpaperKey; label: string; emoji: string; bg: string; preview: string }[] = [
-		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite.jpg') center / cover" },
-		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: "url('/wallpapers/forest.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/forest.jpg') center / cover" },
-		{ key: 'train', label: 'Train', emoji: '🚂', bg: "url('/wallpapers/train.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/train.jpg') center / cover" },
-		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: "url('/wallpapers/crane.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/crane.jpg') center / cover" },
-		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: "url('/wallpapers/construction.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/construction.jpg') center / cover" },
-		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: "url('/wallpapers/daytona.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/daytona.jpg') center / cover" },
-		{ key: 'white', label: 'White', emoji: '⬜', bg: 'white', preview: 'white' },
+		{ key: 'default', label: 'Default', emoji: '🗺️', bg: '', preview: "url('/wallpapers/satellite-night.jpg') center / cover" },
+		{ key: 'forest', label: 'Forest', emoji: '🌲', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/forest.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/forest.jpg') center / cover" },
+		{ key: 'train', label: 'Train', emoji: '🚂', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/train.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/train.jpg') center / cover" },
+		{ key: 'crane', label: 'Crane', emoji: '🏗️', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/crane.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/crane.jpg') center / cover" },
+		{ key: 'construction', label: 'Construction', emoji: '🦺', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/construction.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/construction.jpg') center / cover" },
+		{ key: 'daytona', label: 'Daytona', emoji: '🏁', bg: "linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)), url('/wallpapers/daytona.jpg') center center / cover no-repeat fixed", preview: "url('/wallpapers/daytona.jpg') center / cover" },
+		{ key: 'plain', label: 'Plain', emoji: '⬜', bg: '', preview: '#3b3f4e' },
 	];
 	let wallpaper: WallpaperKey = $state('default');
 	let showSettings = $state(false);
@@ -421,7 +421,7 @@
 </svelte:head>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="game-container" style:background={wallpaper !== 'default' ? WALLPAPERS.find(w => w.key === wallpaper)!.bg : undefined} onpointermove={handlePointerMove} onpointerup={handlePointerUp}>
+<div class="game-container" class:wallpaper-plain={wallpaper === 'plain'} style:background={wallpaper !== 'default' && wallpaper !== 'plain' ? WALLPAPERS.find(w => w.key === wallpaper)!.bg : undefined} onpointermove={handlePointerMove} onpointerup={handlePointerUp}>
 	<div class="header">
 		<h1>Block Blast</h1>
 		<div class="header-right">
@@ -572,12 +572,18 @@
 		padding: 1.5rem 1rem;
 		font-family: system-ui, -apple-system, sans-serif;
 		min-height: 100vh;
-		background: url('/wallpapers/satellite.jpg') center center / cover no-repeat fixed;
+		background:
+			linear-gradient(rgba(0,0,0,0.52), rgba(0,0,0,0.52)),
+			url('/wallpapers/satellite-night.jpg') center center / cover no-repeat fixed;
 		color: #fff;
 		position: relative;
 		touch-action: none;
 		user-select: none;
 		-webkit-user-select: none;
+	}
+
+	.game-container.wallpaper-plain {
+		background: #3b3f4e;
 	}
 
 	.header {
