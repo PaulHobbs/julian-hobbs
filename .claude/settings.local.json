@@ -43,7 +43,9 @@
       "WebFetch(domain:science.nasa.gov)",
       "WebFetch(domain:visibleearth.nasa.gov)",
       "WebFetch(domain:svs.gsfc.nasa.gov)",
-      "WebFetch(domain:unsplash.com)"
+      "WebFetch(domain:unsplash.com)",
+      "Bash(find /Users/phobbs/code/julian-hobbs/src -type f | grep -E \"\\\\.\\(svelte|ts|js|html|css\\)$\" | head -50)",
+      "Bash(pnpm run:*)"
     ]
   },
   "enabledMcpjsonServers": [
