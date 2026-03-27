@@ -45,6 +45,26 @@
 	const MAX_PATH = 60; // path steps to keep for tail drawing
 	const TRAIN_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
+	interface BiomePalette {
+		id: string;
+		name: string;
+		emoji: string;
+		ground: string;
+		water: string;
+		lake: string;
+	}
+
+	const BIOMES: BiomePalette[] = [
+		{ id: 'plains',       name: 'Plains',       emoji: '🌾', ground: '#4a7c3f', water: '#2980b9', lake: '#1a5276' },
+		{ id: 'desert',       name: 'Desert',       emoji: '🏜️', ground: '#c8a84b', water: '#7ab8a8', lake: '#4a9080' },
+		{ id: 'mountain',     name: 'Mountain',     emoji: '🏔️', ground: '#6e7c5c', water: '#4a90b8', lake: '#2a5a80' },
+		{ id: 'island',       name: 'Island',       emoji: '🏝️', ground: '#4db862', water: '#00c4d4', lake: '#0088aa' },
+		{ id: 'badlands',     name: 'Badlands',     emoji: '🌄', ground: '#b8622a', water: '#9b7b4a', lake: '#6b4a1a' },
+		{ id: 'snowy-taiga',  name: 'Snowy Taiga',  emoji: '🌲', ground: '#a8c8c0', water: '#5a98b8', lake: '#2a6890' },
+		{ id: 'snowy-tundra', name: 'Snowy Tundra', emoji: '❄️', ground: '#d8e8f0', water: '#88b8d0', lake: '#4a8aaa' },
+		{ id: 'forest',       name: 'Forest',       emoji: '🌳', ground: '#2a5e28', water: '#1a7a5a', lake: '#0a5040' },
+	];
+
 	const OPPOSITE: Record<Dir, Dir> = { N: 'S', S: 'N', E: 'W', W: 'E' };
 	const DIR_DELTA: Record<Dir, [number, number]> = {
 		N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0]
@@ -156,6 +176,9 @@
 	let animFrame = 0;
 	let lastTime = 0;
 	let rippleOffset = 0; // for animated water
+
+	let selectedBiome: BiomePalette = $state(BIOMES[0]);
+	let showSettings = $state(false);
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 	function makeGrid(): TileType[][] {
@@ -337,8 +360,8 @@
 		const cx = x + C / 2;
 		const cy = y + C / 2;
 
-		// Background grass
-		ctx.fillStyle = '#4a7c3f';
+		// Background ground
+		ctx.fillStyle = selectedBiome.ground;
 		ctx.fillRect(x, y, C, C);
 
 		switch (tile) {
@@ -460,19 +483,19 @@
 			}
 
 			case 'river-h': {
-				ctx.fillStyle = '#2980b9';
+				ctx.fillStyle = selectedBiome.water;
 				ctx.fillRect(x, y, C, C);
 				drawRipples(ctx, x, y, false);
 				break;
 			}
 			case 'river-v': {
-				ctx.fillStyle = '#2980b9';
+				ctx.fillStyle = selectedBiome.water;
 				ctx.fillRect(x, y, C, C);
 				drawRipples(ctx, x, y, true);
 				break;
 			}
 			case 'lake': {
-				ctx.fillStyle = '#1a5276';
+				ctx.fillStyle = selectedBiome.lake;
 				ctx.fillRect(x, y, C, C);
 				// subtle ripple
 				ctx.strokeStyle = 'rgba(255,255,255,0.15)';
@@ -486,7 +509,7 @@
 
 			case 'bridge-short-h': {
 				// River below
-				ctx.fillStyle = '#2980b9';
+				ctx.fillStyle = selectedBiome.water;
 				ctx.fillRect(x, y, C, C);
 				// Wood deck
 				ctx.fillStyle = '#8B6914';
@@ -499,7 +522,7 @@
 				break;
 			}
 			case 'bridge-short-v': {
-				ctx.fillStyle = '#2980b9';
+				ctx.fillStyle = selectedBiome.water;
 				ctx.fillRect(x, y, C, C);
 				ctx.fillStyle = '#8B6914';
 				ctx.fillRect(x + C * 0.3, y, C * 0.4, C);
@@ -511,7 +534,7 @@
 			}
 			case 'bridge-long-h': {
 				// Lake below
-				ctx.fillStyle = '#1a5276';
+				ctx.fillStyle = selectedBiome.lake;
 				ctx.fillRect(x, y, C, C);
 				// Tall concrete piers
 				ctx.fillStyle = '#888';
@@ -525,7 +548,7 @@
 				break;
 			}
 			case 'bridge-long-v': {
-				ctx.fillStyle = '#1a5276';
+				ctx.fillStyle = selectedBiome.lake;
 				ctx.fillRect(x, y, C, C);
 				ctx.fillStyle = '#888';
 				ctx.fillRect(x + C * 0.5, y + 4, C * 0.5, 6);
@@ -1019,6 +1042,9 @@
 			<button class="ctrl-btn" onclick={(e) => { e.stopPropagation(); showSaveLoad = !showSaveLoad; }}>
 				💾 Save / Load
 			</button>
+			<button class="ctrl-btn biome-btn" onclick={(e) => { e.stopPropagation(); showSettings = !showSettings; }}>
+				{selectedBiome.emoji} {selectedBiome.name}
+			</button>
 			<a href="/" class="back-link">← Home</a>
 		</div>
 	</div>
@@ -1124,6 +1150,33 @@
 						<button class="ctrl-btn small" disabled={!saveNames[idx]} onclick={() => { loadFromSlot(idx); showSaveLoad = false; }}>Load</button>
 					</div>
 				{/each}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Settings / Biome panel -->
+	{#if showSettings}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="modal-overlay" onclick={() => showSettings = false}>
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div class="modal" onclick={(e) => e.stopPropagation()}>
+				<div class="modal-header">
+					<h2>Map Biome</h2>
+					<button class="popup-close" onclick={() => showSettings = false}>✕</button>
+				</div>
+				<div class="biome-grid">
+					{#each BIOMES as biome}
+						<button
+							class="biome-card"
+							class:selected={selectedBiome.id === biome.id}
+							onclick={() => { selectedBiome = biome; draw(); }}
+						>
+							<div class="biome-swatch" style:background={biome.ground}></div>
+							<span class="biome-emoji">{biome.emoji}</span>
+							<span class="biome-name">{biome.name}</span>
+						</button>
+					{/each}
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -1371,9 +1424,49 @@
 		color: rgba(255,255,255,0.5);
 	}
 
+	.biome-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+
+	.biome-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 0.6rem;
+		padding-top: 0.25rem;
+	}
+
+	.biome-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.3rem;
+		background: rgba(255,255,255,0.05);
+		border: 1px solid rgba(255,255,255,0.15);
+		border-radius: 10px;
+		padding: 0.6rem 0.4rem;
+		cursor: pointer;
+		transition: all 0.12s;
+		color: #fff;
+	}
+	.biome-card:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); }
+	.biome-card.selected { background: rgba(241,196,15,0.15); border-color: #f1c40f; }
+
+	.biome-swatch {
+		width: 40px;
+		height: 28px;
+		border-radius: 6px;
+		border: 1px solid rgba(0,0,0,0.3);
+	}
+
+	.biome-emoji { font-size: 1.1rem; }
+	.biome-name { font-size: 0.7rem; color: rgba(255,255,255,0.8); text-align: center; }
+
 	@media (max-width: 600px) {
 		.toolbar { width: 120px; }
 		.tool-label { display: none; }
 		.tool-btn { justify-content: center; }
+		.biome-grid { grid-template-columns: repeat(2, 1fr); }
 	}
 </style>

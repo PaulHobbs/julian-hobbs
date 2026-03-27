@@ -45,7 +45,8 @@
       "WebFetch(domain:svs.gsfc.nasa.gov)",
       "WebFetch(domain:unsplash.com)",
       "Bash(find /Users/phobbs/code/julian-hobbs/src -type f | grep -E \"\\\\.\\(svelte|ts|js|html|css\\)$\" | head -50)",
-      "Bash(pnpm run:*)"
+      "Bash(pnpm run:*)",
+      "Bash(sed -n '485,495p' /Users/phobbs/code/julian-hobbs/src/routes/train-maker/+page.svelte | xxd | head -20)"
     ]
   },
   "enabledMcpjsonServers": [
